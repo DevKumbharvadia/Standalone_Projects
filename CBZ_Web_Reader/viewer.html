@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Scroll CBZ Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; background: #1e1e1e; color: white; }
+        #fileInput { margin: 20px; }
+        #viewer { display: flex; flex-direction: column; align-items: center; }
+        img { max-width: 90vw; height: auto; }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="fileInput" accept=".cbz">
+    <div id="viewer"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleCBZ);
+
+        async function handleCBZ(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function () {
+                const zip = await JSZip.loadAsync(reader.result);
+                let images = Object.keys(zip.files)
+                                   .filter(name => /\.(jpe?g|png|gif)$/i.test(name))
+                                   .sort();  // Ensure correct page order
+
+                const viewer = document.getElementById('viewer');
+                viewer.innerHTML = '';  // Clear previous content
+
+                for (let imageName of images) {
+                    const blob = await zip.files[imageName].async('blob');
+                    const url = URL.createObjectURL(blob);
+                    
+                    const img = document.createElement('img');
+                    img.src = url;
+                    viewer.appendChild(img);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+
+</body>
+</html>

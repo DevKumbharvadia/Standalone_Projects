@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced CBZ Viewer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-primary: #121212;
+            --bg-secondary: #1e1e1e;
+            --text-primary: #ffffff;
+            --text-secondary: #b0b0b0;
+            --accent-color: #4a90e2;
+            --hover-color: #6ab0ff;
+        }
+
+        * {
+            box-sizing: border-box;
+            scrollbar-width: thin;
+            scrollbar-color: var(--accent-color) var(--bg-secondary);
+        }
+
+        body {
+            font-family: 'Inter', 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            margin: 0;
+            display: flex;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        #sidebar {
+            width: 320px;
+            background: var(--bg-secondary);
+            position: fixed;
+            left: -320px;
+            top: 0;
+            height: 100%;
+            overflow-y: auto;
+            transition: left 0.3s ease-in-out;
+            padding: 20px;
+            z-index: 1000;
+            box-shadow: 4px 0 15px rgba(0, 0, 0, 0.3);
+        }
+
+        #sidebar-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 10px;
+        }
+
+        #sidebar-title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: var(--accent-color);
+        }
+
+        #sidebar-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+
+        #sidebar-close:hover {
+            color: var(--text-primary);
+        }
+
+        #cbzList {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        #cbzList li {
+            background: rgba(255,255,255,0.05);
+            margin: 10px 0;
+            padding: 12px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+        }
+
+        #cbzList li:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--accent-color);
+        }
+
+        #cbzList li.active {
+            background: var(--accent-color);
+            color: white;
+        }
+
+        .chapter-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chapter-name {
+            font-weight: 500;
+        }
+
+        .chapter-pages {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        #controls {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            display: flex;
+            justify-content: space-between;
+            padding: 15px;
+            background: rgba(30,30,30,0.8);
+            backdrop-filter: blur(10px);
+            z-index: 100;
+        }
+
+        .control-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: var(--text-primary);
+            padding: 10px 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .control-btn:hover {
+            background: var(--accent-color);
+        }
+
+        .control-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #viewer {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 80px 20px 20px;
+            margin-left: 0;
+            width: 100%;
+            transition: margin-left 0.3s ease;
+            gap: 15px;
+        }
+
+        #viewer img {
+            max-width: 90vw;
+            max-height: calc(100vh - 120px);
+            object-fit: contain;
+            border-radius: 10px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        #page-indicator {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+            margin-top: 10px;
+        }
+
+        .menu-open #sidebar {
+            left: 0;
+        }
+
+        .menu-open #viewer {
+            margin-left: 320px;
+        }
+
+        #folderInput {
+            display: none;
+        }
+
+        @media (max-width: 768px) {
+            #sidebar {
+                width: 100%;
+                left: -100%;
+            }
+
+            .menu-open #viewer {
+                margin-left: 0;
+                filter: blur(5px);
+            }
+
+            #controls {
+                flex-direction: column;
+                align-items: center;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <div>
+            <button id="menuBtn" class="control-btn">📂 Chapters</button>
+            <button id="folderUploadBtn" class="control-btn" onclick="document.getElementById('folderInput').click()">📁 Upload</button>
+        </div>
+        <div>
+            <button id="prevChapterBtn" class="control-btn" disabled>⬅️ Prev</button>
+            <button id="nextChapterBtn" class="control-btn" disabled>➡️ Next</button>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <div id="sidebar-header">
+            <div id="sidebar-title">Chapters</div>
+            <button id="sidebar-close">✕</button>
+        </div>
+        <ul id="cbzList"></ul>
+    </div>
+
+    <input type="file" id="folderInput" webkitdirectory multiple>
+    
+    <div id="viewer">
+        <div id="page-indicator"></div>
+    </div>
+
+    <script>
+        const menuBtn = document.getElementById("menuBtn");
+        const sidebarCloseBtn = document.getElementById("sidebar-close");
+        const folderInput = document.getElementById("folderInput");
+        const cbzList = document.getElementById("cbzList");
+        const viewer = document.getElementById("viewer");
+        const pageIndicator = document.getElementById("page-indicator");
+        const prevChapterBtn = document.getElementById("prevChapterBtn");
+        const nextChapterBtn = document.getElementById("nextChapterBtn");
+
+        let currentFiles = [];
+        let currentChapterIndex = -1;
+        let currentCBZFile = null;
+        let imageQueue = [];
+        let currentPageIndex = 0;
+
+        function toggleSidebar() {
+            document.body.classList.toggle("menu-open");
+        }
+
+        menuBtn.addEventListener("click", toggleSidebar);
+        sidebarCloseBtn.addEventListener("click", toggleSidebar);
+        folderInput.addEventListener("change", handleFolder);
+        prevChapterBtn.addEventListener("click", prevChapter);
+        nextChapterBtn.addEventListener("click", nextChapter);
+
+        function handleFolder(event) {
+            currentFiles = Array.from(event.target.files)
+                .filter(file => file.name.endsWith(".cbz"))
+                .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+            cbzList.innerHTML = "";
+            currentFiles.forEach((file, index) => {
+                const li = document.createElement("li");
+                li.innerHTML = `
+                    <div class="chapter-info">
+                        <span class="chapter-name">${file.name}</span>
+                        <span class="chapter-pages">Loading...</span>
+                    </div>
+                `;
+                li.addEventListener("click", () => loadCBZ(file, index));
+                cbzList.appendChild(li);
+
+                // Determine page count asynchronously
+                countPages(file, li);
+            });
+
+            prevChapterBtn.disabled = true;
+            nextChapterBtn.disabled = currentFiles.length <= 1;
+        }
+
+        async function countPages(file, listItem) {
+            const zip = new JSZip();
+            const reader = new FileReader();
+            
+            reader.onload = async function(event) {
+                const content = await zip.loadAsync(event.target.result);
+                const pageCount = Object.keys(content.files)
+                    .filter(name => /\.(jpe?g|png|gif)$/i.test(name)).length;
+                
+                const pagesSpan = listItem.querySelector('.chapter-pages');
+                pagesSpan.textContent = `${pageCount} pages`;
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function loadCBZ(file, index) {
+            currentCBZFile = file;
+            currentChapterIndex = index;
+            currentPageIndex = 0;
+
+            // Update active chapter in sidebar
+            document.querySelectorAll('#cbzList li').forEach(el => el.classList.remove('active'));
+            document.getElementById('cbzList').children[index].classList.add('active');
+
+            viewer.innerHTML = '<div id="page-indicator"></div>';
+            const zip = new JSZip();
+            const reader = new FileReader();
+            
+            reader.onload = async function(event) {
+                const content = await zip.loadAsync(event.target.result);
+                imageQueue = Object.keys(content.files)
+                    .filter(name => /\.(jpe?g|png|gif)$/i.test(name))
+                    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                
+                updateNavigationButtons();
+                displayNextImage(content);
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        async function displayNextImage(content) {
+            if (imageQueue.length === 0) return;
+
+            const imgName = imageQueue.shift();
+            const blob = await content.files[imgName].async("blob");
+            const img = document.createElement("img");
+            img.src = URL.createObjectURL(blob);
+            
+            img.onload = () => {
+                URL.revokeObjectURL(img.src);
+                currentPageIndex++;
+                updatePageIndicator();
+
+                if (imageQueue.length > 0) {
+                    displayNextImage(content);
+                }
+            };
+            
+            viewer.appendChild(img);
+        }
+
+        function updatePageIndicator() {
+            const totalPages = viewer.querySelectorAll('img').length;
+            pageIndicator.textContent = `Page ${currentPageIndex} of ${totalPages}`;
+        }
+
+        function updateNavigationButtons() {
+            prevChapterBtn.disabled = currentChapterIndex <= 0;
+            nextChapterBtn.disabled = currentChapterIndex >= currentFiles.length - 1;
+        }
+
+        function prevChapter() {
+            if (currentChapterIndex > 0) {
+                const prevFile = currentFiles[currentChapterIndex - 1];
+                loadCBZ(prevFile, currentChapterIndex - 1);
+            }
+        }
+
+        function nextChapter() {
+            if (currentChapterIndex < currentFiles.length - 1) {
+                const nextFile = currentFiles[currentChapterIndex + 1];
+                loadCBZ(nextFile, currentChapterIndex + 1);
+            }
+        }
+    </script>
+</body>
+</html>

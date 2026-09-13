@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Scroll CBZ Viewer</title>
+    <style>
+        body { font-family: Arial, sans-serif; text-align: center; margin: 0; background: #1e1e1e; color: white; }
+        #fileInput { margin: 20px; }
+        #fullscreenBtn { position: fixed; top: 10px; right: 10px; padding: 10px; background: rgba(255, 255, 255, 0.2); color: white; border: none; cursor: pointer; border-radius: 5px; }
+        #viewer { display: flex; flex-direction: column; align-items: center; }
+        img { max-width: 100vw; height: auto; transition: transform 0.2s; }
+        .zoomed { transform: scale(2); }
+    </style>
+</head>
+<body>
+
+    <input type="file" id="fileInput" accept=".cbz">
+    <button id="fullscreenBtn">📱 Full Screen</button>
+    <div id="viewer"></div>
+<input type="file" id="fileInput" accept=".cbz">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script>
+        document.getElementById('fileInput').addEventListener('change', handleCBZ);
+        document.getElementById('fullscreenBtn').addEventListener('click', toggleFullScreen);
+
+        async function handleCBZ(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function () {
+                const zip = await JSZip.loadAsync(reader.result);
+                let images = Object.keys(zip.files)
+                                   .filter(name => /\.(jpe?g|png|gif)$/i.test(name))
+                                   .sort();  // Ensure correct page order
+
+                const viewer = document.getElementById('viewer');
+                viewer.innerHTML = '';  // Clear previous content
+
+                for (let imageName of images) {
+                    const blob = await zip.files[imageName].async('blob');
+                    const url = URL.createObjectURL(blob);
+                    
+                    const img = document.createElement('img');
+                    img.src = url;
+                    img.addEventListener('dblclick', toggleZoom); // Double-tap zoom
+                    viewer.appendChild(img);
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function toggleFullScreen() {
+            const doc = document.documentElement;
+            if (!document.fullscreenElement) {
+                doc.requestFullscreen?.() || doc.mozRequestFullScreen?.() || doc.webkitRequestFullscreen?.() || doc.msRequestFullscreen?.();
+            } else {
+                document.exitFullscreen?.() || document.mozCancelFullScreen?.() || document.webkitExitFullscreen?.() || document.msExitFullscreen?.();
+            }
+        }
+
+        function toggleZoom(event) {
+            event.target.classList.toggle('zoomed');
+        }
+    </script>
+
+</body>
+</html>

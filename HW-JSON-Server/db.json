@@ -1,0 +1,8 @@
+{
+  "_comment1": "npm install -g json-server",
+  "_comment2": "json-server --watch db.json --port 3001",
+  "Last_Id": {
+    "Last_Id": 0
+  },
+  "Students": []
+}

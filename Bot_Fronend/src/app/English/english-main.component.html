@@ -1,0 +1,17 @@
+@for (msg of appServices.messages; track msg) {
+<div class="flex justify-start">
+  <div class="bg-gray-200 p-3 m-2 rounded-lg max-w-xs">
+    <div [innerHTML]="msg"></div>
+  </div>
+</div>
+}
+@if(ShowAdmissions == 1)
+{
+  <app-admission></app-admission>
+}
+@if(ShowExtensionEducation == 1){
+  <app-extension></app-extension>
+}
+@if(ShowResearch == 1){
+  <app-research></app-research>
+}

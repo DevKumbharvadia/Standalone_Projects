@@ -1,0 +1,1072 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>CBZ Reader</title>
+<style>
+  :root{
+    --bg:#08090d;
+    --panel:rgba(18,20,28,.84);
+    --panel-solid:#11131a;
+    --panel-2:#171a23;
+    --text:#f5f7fb;
+    --muted:#9298a8;
+    --line:rgba(255,255,255,.09);
+    --accent:#8b5cf6;
+    --accent-2:#5eead4;
+    --danger:#fb7185;
+    --shadow:0 20px 60px rgba(0,0,0,.35);
+    --radius:18px;
+    --reader-bg:#08090d;
+  }
+
+
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{
+    overflow:hidden;
+    background:
+      radial-gradient(circle at 15% 10%,color-mix(in srgb,var(--accent) 14%,transparent),transparent 30%),
+      radial-gradient(circle at 85% 85%,color-mix(in srgb,var(--accent-2) 8%,transparent),transparent 30%),
+      var(--bg);
+    color:var(--text);
+    font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  }
+
+  button,input,select{font:inherit}
+  button{color:inherit}
+
+  .app{
+    height:100%;
+    display:grid;
+    grid-template-columns:300px 1fr;
+    transition:grid-template-columns .28s cubic-bezier(.2,.8,.2,1);
+  }
+  .app.sidebar-collapsed{grid-template-columns:0 1fr}
+
+  .sidebar{
+    min-width:0;
+    overflow:hidden;
+    border-right:1px solid var(--line);
+    background:rgba(11,12,17,.78);
+    backdrop-filter:blur(22px);
+    display:flex;
+    flex-direction:column;
+  }
+
+  .brand{
+    padding:18px 18px 14px;
+    border-bottom:1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .logo{
+    width:38px;height:38px;border-radius:12px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,var(--accent),#5b6bff);
+    box-shadow:0 10px 30px rgba(139,92,246,.25);
+    font-weight:900;
+  }
+  .brand h1{font-size:14px;margin:0;letter-spacing:.2px}
+  .brand p{font-size:11px;color:var(--muted);margin:3px 0 0}
+
+  .sidebar-actions{
+    display:grid;
+    grid-template-columns:1fr 42px;
+    gap:8px;
+    padding:12px;
+    border-bottom:1px solid var(--line);
+  }
+
+  .btn,.icon-btn{
+    border:1px solid var(--line);
+    background:rgba(255,255,255,.045);
+    border-radius:12px;
+    cursor:pointer;
+    transition:.18s ease;
+  }
+  .btn:hover,.icon-btn:hover{
+    background:rgba(255,255,255,.09);
+    transform:translateY(-1px);
+    border-color:rgba(255,255,255,.16);
+  }
+  .btn:active,.icon-btn:active{transform:translateY(0) scale(.98)}
+  .btn{
+    padding:10px 12px;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+    font-weight:700;font-size:13px;
+  }
+  .btn.primary{
+    border-color:transparent;
+    background:linear-gradient(135deg,var(--accent),#6366f1);
+  }
+  .btn.primary:hover{filter:brightness(1.08)}
+  .icon-btn{
+    width:42px;height:42px;
+    display:grid;place-items:center;
+    flex:0 0 auto;
+  }
+  .icon-btn svg,.btn svg{width:18px;height:18px}
+
+  .meta{
+    padding:12px 14px 8px;
+    font-size:12px;
+    color:var(--muted);
+    display:flex;justify-content:space-between;gap:10px;
+  }
+  .meta strong{color:var(--text);font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .thumbs{
+    overflow:auto;
+    padding:8px 10px 20px;
+    scrollbar-width:thin;
+    scrollbar-color:#343746 transparent;
+  }
+  .thumb{
+    width:100%;
+    display:grid;
+    grid-template-columns:60px minmax(0,1fr);
+    gap:10px;
+    align-items:center;
+    padding:8px;
+    margin-bottom:7px;
+    border:1px solid transparent;
+    border-radius:13px;
+    background:transparent;
+    cursor:pointer;
+    text-align:left;
+  }
+  .thumb:hover{background:rgba(255,255,255,.045)}
+  .thumb.active{
+    background:linear-gradient(90deg,rgba(139,92,246,.17),rgba(139,92,246,.05));
+    border-color:rgba(139,92,246,.36);
+  }
+  .thumb img{
+    width:60px;height:82px;object-fit:cover;border-radius:8px;
+    background:#0f1118;border:1px solid var(--line);
+  }
+  .thumb .n{font-weight:800;font-size:12px}
+  .thumb .name{
+    display:block;
+    margin-top:4px;
+    color:var(--muted);
+    font-size:10px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+
+  .main{
+    min-width:0;
+    min-height:0;
+    height:100dvh;
+    position:relative;
+    overflow:hidden;
+  }
+
+  .toolbar{
+    position:absolute;
+    top:12px;
+    left:50%;
+    width:min(1080px,calc(100% - 28px));
+    transform:translateX(-50%);
+    z-index:20;
+    transition:transform .32s cubic-bezier(.2,.8,.2,1), opacity .25s ease;
+    display:flex;
+    align-items:center;
+    gap:4px;
+    min-height:46px;
+    padding:5px 7px;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:14px;
+    background:rgba(10,11,16,.78);
+    box-shadow:0 8px 30px rgba(0,0,0,.22);
+    backdrop-filter:blur(18px);
+  }
+  .toolbar .spacer{flex:1}
+  .title-wrap{min-width:0;margin-left:2px}
+  .title{
+    font-size:13px;font-weight:800;
+    max-width:min(36vw,520px);
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .subtitle{font-size:10px;color:var(--muted);margin-top:2px}
+
+  .pill{
+    display:flex;
+    align-items:center;
+    gap:2px;
+    padding:0;
+    background:transparent;
+    border:0;
+  }
+  .pill .icon-btn{width:34px;height:34px;border:0;background:transparent;border-radius:9px}
+  .pill .icon-btn:hover{background:rgba(255,255,255,.07)}
+  .zoom-label{
+    min-width:54px;text-align:center;font-size:11px;color:var(--muted);font-weight:800;
+  }
+
+  .viewer{
+    position:absolute;
+    inset:10px;
+    background:var(--reader-bg);
+    overflow:auto;
+    min-height:0;
+    padding:0;
+    border-radius:12px;
+    scrollbar-width:thin;
+    scrollbar-color:#343746 transparent;
+    overscroll-behavior:contain;
+  }
+  .stage{
+    width:max-content;
+    min-width:100%;
+    min-height:100%;
+    margin:auto;
+    padding:22px;
+    position:relative;
+    display:flex;
+    gap:14px;
+    align-items:flex-start;
+    justify-content:center;
+    transition:opacity .15s ease;
+  }
+  .stage.continuous{
+    width:100%;
+    min-width:0;
+    padding:0;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:flex-start;
+    gap:0;
+  }
+  .stage.continuous .page{
+    flex:none;
+    display:block;
+    margin:0;
+    padding:0;
+    border:0;
+    border-radius:0;
+    box-shadow:none;
+    vertical-align:top;
+  }
+  .stage.loading{opacity:.25}
+  .page{
+    display:block;
+    max-width:none;
+    user-select:none;
+    -webkit-user-drag:none;
+    background:#0e1016;
+    box-shadow:0 20px 70px rgba(0,0,0,.58);
+    border-radius:3px;
+  }
+
+  .nav-zone{
+    position:fixed;
+    top:0;bottom:0;
+    width:11vw;
+    z-index:8;
+    cursor:pointer;
+    opacity:0;
+    transition:opacity .2s ease;
+  }
+  .nav-zone:hover{opacity:1}
+  .nav-zone.prev{left:300px;background:linear-gradient(90deg,rgba(0,0,0,.24),transparent)}
+  .sidebar-collapsed .nav-zone.prev{left:0}
+  .nav-zone.next{right:0;background:linear-gradient(-90deg,rgba(0,0,0,.24),transparent)}
+  .nav-zone::after{
+    content:"";
+    position:absolute;top:50%;transform:translateY(-50%) rotate(45deg);
+    width:16px;height:16px;border:solid rgba(255,255,255,.62);border-width:0 0 2px 2px;
+  }
+  .nav-zone.prev::after{left:25px}
+  .nav-zone.next::after{right:25px;transform:translateY(-50%) rotate(225deg)}
+
+  .bottom{
+    position:absolute;
+    left:50%;
+    bottom:12px;
+    width:min(680px,calc(100% - 28px));
+    transform:translateX(-50%);
+    display:grid;
+    transition:transform .32s cubic-bezier(.2,.8,.2,1), opacity .25s ease;
+    grid-template-columns:auto minmax(120px,1fr);
+    gap:12px;
+    align-items:center;
+    min-height:42px;
+    padding:7px 12px;
+    border:1px solid rgba(255,255,255,.08);
+    border-radius:13px;
+    background:rgba(10,11,16,.78);
+    box-shadow:0 8px 30px rgba(0,0,0,.22);
+    backdrop-filter:blur(18px);
+    z-index:20;
+  }
+  .page-counter{
+    font-size:11px;color:var(--muted);font-weight:800;min-width:70px;
+  }
+  input[type="range"]{
+    appearance:none;
+    height:3px;
+    border-radius:99px;
+    background:linear-gradient(90deg,var(--accent) var(--progress,0%),rgba(255,255,255,.1) var(--progress,0%));
+    outline:none;
+  }
+  input[type="range"]::-webkit-slider-thumb{
+    appearance:none;width:12px;height:12px;border-radius:50%;
+    background:#fff;box-shadow:0 0 0 4px rgba(139,92,246,.25);cursor:pointer;
+  }
+
+  .hint{display:none}
+
+  .empty{
+    position:absolute;
+    inset:0;
+    display:grid;
+    place-items:center;
+    z-index:12;
+    pointer-events:none;
+  }
+  .drop-card{
+    pointer-events:auto;
+    width:min(520px,calc(100vw - 40px));
+    padding:34px;
+    border:1px solid var(--line);
+    border-radius:26px;
+    background:linear-gradient(180deg,rgba(22,24,33,.88),rgba(14,16,22,.84));
+    box-shadow:var(--shadow);
+    text-align:center;
+    position:relative;
+    overflow:hidden;
+  }
+  .drop-card::before{
+    content:"";
+    position:absolute;
+    width:240px;height:240px;
+    border-radius:50%;
+    background:rgba(139,92,246,.15);
+    filter:blur(60px);
+    top:-140px;left:-60px;
+  }
+  .drop-icon{
+    width:74px;height:74px;margin:0 auto 18px;border-radius:22px;
+    display:grid;place-items:center;
+    background:linear-gradient(135deg,rgba(139,92,246,.26),rgba(94,234,212,.12));
+    border:1px solid rgba(255,255,255,.1);
+  }
+  .drop-icon svg{width:34px;height:34px}
+  .drop-card h2{font-size:21px;margin:0 0 8px}
+  .drop-card p{margin:0 auto 20px;color:var(--muted);font-size:13px;line-height:1.6;max-width:390px}
+  .kbd{
+    display:inline-flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:18px;
+  }
+  .kbd span{
+    padding:5px 8px;border-radius:8px;background:rgba(255,255,255,.05);
+    border:1px solid var(--line);font-size:10px;color:var(--muted);
+  }
+
+  .drag-overlay{
+    position:fixed;inset:14px;z-index:100;
+    border:2px dashed rgba(139,92,246,.6);
+    border-radius:24px;
+    background:rgba(12,13,19,.86);
+    backdrop-filter:blur(15px);
+    display:none;place-items:center;
+    font-size:22px;font-weight:900;
+  }
+  body.dragging .drag-overlay{display:grid}
+
+  .toast{
+    position:fixed;
+    left:50%;bottom:72px;
+    transform:translate(-50%,20px);
+    z-index:120;
+    padding:10px 14px;
+    border-radius:12px;
+    background:rgba(23,26,35,.94);
+    border:1px solid var(--line);
+    box-shadow:var(--shadow);
+    color:#fff;
+    font-size:12px;
+    opacity:0;pointer-events:none;
+    transition:.2s ease;
+  }
+  .toast.show{opacity:1;transform:translate(-50%,0)}
+
+  .loading-ring{
+    width:18px;height:18px;border:2px solid rgba(255,255,255,.18);
+    border-top-color:#fff;border-radius:50%;
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg)}}
+
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+  @media (max-width: 800px){
+    .app{grid-template-columns:0 1fr}
+    .sidebar{
+      position:fixed;z-index:50;left:0;top:0;bottom:0;width:min(84vw,310px);
+      transform:translateX(-100%);
+      transition:transform .25s ease;
+      box-shadow:var(--shadow);
+    }
+    .app.mobile-sidebar .sidebar{transform:translateX(0)}
+    .title-wrap{display:none}
+    .toolbar{
+      top:8px;
+      width:calc(100% - 16px);
+      padding:5px 6px;
+    }
+    .viewer{inset:7px;padding:0;border-radius:10px}
+    .nav-zone.prev{left:0}
+    .hint{display:none}
+    .bottom{
+      bottom:8px;
+      width:calc(100% - 16px);
+      grid-template-columns:auto minmax(90px,1fr);
+    }
+    .pill.fit-controls{display:none}
+  }
+
+  /* Immersive reading: controls retract after inactivity. */
+  .app.controls-hidden .toolbar{
+    transform:translate(-50%,calc(-100% - 18px));
+    opacity:0;
+    pointer-events:none;
+  }
+  .app.controls-hidden .bottom{
+    transform:translate(-50%,calc(100% + 18px));
+    opacity:0;
+    pointer-events:none;
+  }
+
+  .reveal-zone{
+    position:fixed;
+    left:0;
+    right:0;
+    height:38px;
+    z-index:90;
+    display:none;
+  }
+  .reveal-zone.top{top:0}
+  .reveal-zone.bottom{bottom:0}
+  .app.controls-hidden ~ .reveal-zone{display:block}
+
+  /* Controls are overlays; hiding them never leaves empty layout rows. */
+
+
+
+
+  .toolbar > .icon-btn,
+  .toolbar > .pill > .icon-btn{
+    width:34px;
+    height:34px;
+    border:0;
+    background:transparent;
+  }
+  .toolbar > .icon-btn:hover,
+  .toolbar > .pill > .icon-btn:hover{
+    background:rgba(255,255,255,.07);
+    transform:none;
+  }
+  .toolbar .title{font-size:12px;font-weight:700}
+  .toolbar .subtitle{display:none}
+
+</style>
+</head>
+<body>
+<div class="app sidebar-collapsed" id="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="logo">C</div>
+      <div>
+        <h1>CBZ Reader</h1>
+        <p>Local · private · fast</p>
+      </div>
+    </div>
+
+    <div class="sidebar-actions">
+      <button class="btn primary" id="openBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12m0 0 4-4m-4 4-4-4"/><path d="M5 21h14a2 2 0 0 0 2-2v-4M3 15v4a2 2 0 0 0 2 2"/></svg>
+        Open CBZ
+      </button>
+      <button class="icon-btn" id="closeBookBtn" title="Close comic">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+
+    <div class="meta">
+      <strong id="sideTitle">No comic</strong>
+      <span id="sideCount">0 pages</span>
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+  </aside>
+
+  <main class="main">
+    <header class="toolbar">
+      <button class="icon-btn" id="menuBtn" title="Toggle thumbnails">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+
+      <div class="title-wrap">
+        <div class="title" id="title">CBZ Reader</div>
+        <div class="subtitle" id="subtitle">Open a comic archive to start reading</div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="pill fit-controls">
+        <button class="icon-btn" id="fitWidthBtn" title="Fit width">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 8V5h3M17 5h3v3M20 16v3h-3M7 19H4v-3"/><path d="M8 12h8"/></svg>
+        </button>
+        <button class="icon-btn" id="fitHeightBtn" title="Fit height">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4H5v3M5 17v3h3M16 20h3v-3M19 7V4h-3"/><path d="M12 8v8"/></svg>
+        </button>
+        <button class="icon-btn" id="actualBtn" title="Actual size">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="5" width="14" height="14" rx="2"/><path d="M9 9h6v6H9z"/></svg>
+        </button>
+      </div>
+
+      <div class="pill">
+        <button class="icon-btn" id="zoomOutBtn" title="Zoom out">−</button>
+        <div class="zoom-label" id="zoomLabel">Fit</div>
+        <button class="icon-btn" id="zoomInBtn" title="Zoom in">+</button>
+      </div>
+
+      <button class="icon-btn" id="modeBtn" title="Switch reading mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 4h12v6H6zM6 14h12v6H6z"/></svg>
+      </button>
+
+      <button class="icon-btn" id="spreadBtn" title="Toggle two-page view">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v17H6.5A2.5 2.5 0 0 0 4 22V5.5ZM20 5.5A2.5 2.5 0 0 0 17.5 3H13v17h4.5A2.5 2.5 0 0 1 20 22V5.5Z"/></svg>
+      </button>
+
+      <button class="icon-btn" id="fullscreenBtn" title="Fullscreen">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 3H3v5M16 3h5v5M21 16v5h-5M3 16v5h5"/></svg>
+      </button>
+    </header>
+
+    <section class="viewer centered" id="viewer">
+      <div class="stage" id="stage"></div>
+    </section>
+
+    <div class="nav-zone prev" id="prevZone" aria-label="Previous page"></div>
+    <div class="nav-zone next" id="nextZone" aria-label="Next page"></div>
+
+    <footer class="bottom">
+      <div class="page-counter" id="pageCounter">0 / 0</div>
+      <input type="range" id="pageSlider" min="1" max="1" value="1" disabled aria-label="Page" />
+    </footer>
+  </main>
+</div>
+<div class="reveal-zone top" id="topReveal"></div>
+<div class="reveal-zone bottom" id="bottomReveal"></div>
+
+<div class="empty" id="empty">
+  <div class="drop-card" id="dropCard">
+    <div class="drop-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M12 16V4m0 0L8 8m4-4 4 4"/>
+        <path d="M5 12v7a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-7"/>
+      </svg>
+    </div>
+    <h2>Drop a .cbz comic here</h2>
+    <p>Everything is extracted locally in your browser. Nothing is uploaded anywhere.</p>
+    <button class="btn primary" id="heroOpenBtn" style="margin:auto">
+      Choose CBZ file
+    </button>
+    <div class="kbd">
+      <span>← Previous</span><span>→ Next</span><span>Wheel Zoom</span><span>F Fullscreen</span>
+    </div>
+  </div>
+</div>
+
+<div class="drag-overlay">Drop your CBZ to open it</div>
+<div class="toast" id="toast"></div>
+<input class="sr-only" type="file" id="fileInput" accept=".cbz,.zip,application/zip" />
+
+<script>
+(() => {
+  "use strict";
+
+  const $ = s => document.querySelector(s);
+  const app = $("#app");
+  const viewer = $("#viewer");
+  const stage = $("#stage");
+  const thumbs = $("#thumbs");
+  const empty = $("#empty");
+  const fileInput = $("#fileInput");
+  const slider = $("#pageSlider");
+  const toastEl = $("#toast");
+
+  let pages = [];
+  let current = 0;
+  let spread = false;
+  let readingMode = "page"; // page | continuous
+  let zoom = 1;
+  let fitMode = "height";
+  let bookName = "";
+  let objectUrls = [];
+  let dragDepth = 0;
+  let toastTimer = null;
+  let controlsTimer = null;
+  const CONTROL_HIDE_DELAY = 2200;
+
+  const svgLoading = '<div class="loading-ring"></div>';
+
+  function toast(msg){
+    clearTimeout(toastTimer);
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    toastTimer = setTimeout(()=>toastEl.classList.remove("show"), 1800);
+  }
+
+  function naturalSort(a,b){
+    return a.localeCompare(b, undefined, {numeric:true, sensitivity:"base"});
+  }
+
+  function readU16(v,o){ return v.getUint16(o,true); }
+  function readU32(v,o){ return v.getUint32(o,true); }
+
+  async function inflateRaw(bytes){
+    if (!("DecompressionStream" in window)) {
+      throw new Error("This browser does not support native ZIP decompression. Try current Chrome, Edge or Firefox.");
+    }
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+
+  // Minimal ZIP/CBZ parser using the central directory.
+  // Supports common ZIP methods: Stored (0) and Deflate (8).
+  async function unzipCbz(arrayBuffer){
+    const u8 = new Uint8Array(arrayBuffer);
+    const view = new DataView(arrayBuffer);
+    const decoder = new TextDecoder("utf-8");
+
+    let eocd = -1;
+    const min = Math.max(0, u8.length - 65557);
+    for(let i=u8.length-22;i>=min;i--){
+      if(readU32(view,i) === 0x06054b50){ eocd = i; break; }
+    }
+    if(eocd < 0) throw new Error("Invalid ZIP/CBZ: end record not found.");
+
+    const entriesCount = readU16(view, eocd + 10);
+    const cdOffset = readU32(view, eocd + 16);
+    let p = cdOffset;
+    const files = [];
+
+    for(let n=0;n<entriesCount;n++){
+      if(readU32(view,p) !== 0x02014b50) throw new Error("Invalid ZIP/CBZ central directory.");
+      const method = readU16(view,p+10);
+      const compressedSize = readU32(view,p+20);
+      const uncompressedSize = readU32(view,p+24);
+      const nameLen = readU16(view,p+28);
+      const extraLen = readU16(view,p+30);
+      const commentLen = readU16(view,p+32);
+      const localOffset = readU32(view,p+42);
+      const nameBytes = u8.slice(p+46,p+46+nameLen);
+      const name = decoder.decode(nameBytes);
+
+      if(!name.endsWith("/")){
+        files.push({name,method,compressedSize,uncompressedSize,localOffset});
+      }
+      p += 46 + nameLen + extraLen + commentLen;
+    }
+
+    const imageExt = /\.(jpe?g|png|gif|webp|bmp|avif)$/i;
+    const imageFiles = files.filter(f=>imageExt.test(f.name)).sort((a,b)=>naturalSort(a.name,b.name));
+    if(!imageFiles.length) throw new Error("No supported images found inside this CBZ.");
+
+    const out = [];
+    for(const f of imageFiles){
+      const lo = f.localOffset;
+      if(readU32(view,lo) !== 0x04034b50) throw new Error("Invalid ZIP local header.");
+      const nameLen = readU16(view,lo+26);
+      const extraLen = readU16(view,lo+28);
+      const dataStart = lo + 30 + nameLen + extraLen;
+      const compressed = u8.slice(dataStart,dataStart+f.compressedSize);
+      let bytes;
+
+      if(f.method === 0) bytes = compressed;
+      else if(f.method === 8) bytes = await inflateRaw(compressed);
+      else throw new Error(`Unsupported ZIP compression method ${f.method}.`);
+
+      const ext = f.name.split(".").pop().toLowerCase();
+      const mime = ({
+        jpg:"image/jpeg",jpeg:"image/jpeg",png:"image/png",gif:"image/gif",
+        webp:"image/webp",bmp:"image/bmp",avif:"image/avif"
+      })[ext] || "application/octet-stream";
+
+      const url = URL.createObjectURL(new Blob([bytes],{type:mime}));
+      objectUrls.push(url);
+      out.push({name:f.name,url});
+    }
+    return out;
+  }
+
+  function cleanup(){
+    objectUrls.forEach(URL.revokeObjectURL);
+    objectUrls = [];
+    pages = [];
+    current = 0;
+    stage.innerHTML = "";
+    thumbs.innerHTML = "";
+  }
+
+  async function openFile(file){
+    if(!file) return;
+    if(!/\.(cbz|zip)$/i.test(file.name)){
+      toast("Please choose a .cbz or .zip file.");
+      return;
+    }
+
+    cleanup();
+    bookName = file.name.replace(/\.(cbz|zip)$/i,"");
+    $("#title").textContent = bookName;
+    $("#subtitle").innerHTML = svgLoading + " &nbsp; Reading archive…";
+    $("#sideTitle").textContent = bookName;
+    empty.style.display = "none";
+    stage.classList.add("loading");
+
+    try{
+      const buf = await file.arrayBuffer();
+      pages = await unzipCbz(buf);
+      current = Math.min(loadProgress(bookName), pages.length-1);
+      buildThumbs();
+      slider.disabled = false;
+      slider.max = pages.length;
+      $("#sideCount").textContent = `${pages.length} pages`;
+      $("#subtitle").textContent = `${pages.length} pages · local file`;
+      app.classList.remove("sidebar-collapsed");
+      render();
+      showControls();
+      toast(`Loaded ${pages.length} pages`);
+    }catch(err){
+      console.error(err);
+      cleanup();
+      empty.style.display = "";
+      $("#title").textContent = "CBZ Reader";
+      $("#subtitle").textContent = "Could not open archive";
+      $("#sideTitle").textContent = "No comic";
+      $("#sideCount").textContent = "0 pages";
+      alert(err.message || "Could not open CBZ.");
+    }finally{
+      stage.classList.remove("loading");
+    }
+  }
+
+  function loadProgress(name){
+    try{
+      const n = Number(localStorage.getItem("cbz-reader:"+name));
+      return Number.isFinite(n) && n >= 0 ? n : 0;
+    }catch{return 0}
+  }
+  function saveProgress(){
+    if(bookName && pages.length){
+      try{ localStorage.setItem("cbz-reader:"+bookName, String(current)); }catch{}
+    }
+  }
+
+  function buildThumbs(){
+    thumbs.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    pages.forEach((p,i)=>{
+      const b = document.createElement("button");
+      b.className = "thumb";
+      b.dataset.index = i;
+      b.innerHTML = `
+        <img loading="lazy" src="${p.url}" alt="">
+        <span>
+          <span class="n">Page ${i+1}</span>
+          <span class="name">${escapeHtml(p.name)}</span>
+        </span>`;
+      b.addEventListener("click",()=>goTo(i));
+      frag.appendChild(b);
+    });
+    thumbs.appendChild(frag);
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  }
+
+  function goTo(i){
+    if(!pages.length) return;
+    const step = spread ? 2 : 1;
+    current = Math.max(0,Math.min(pages.length-1,i));
+    if(spread && current === pages.length-1 && pages.length>1 && current%2===1) current--;
+    if(readingMode==="continuous"){
+      updateUi();
+      const target=stage.querySelector(`[data-index="${current}"]`);
+      target?.scrollIntoView({behavior:"smooth",block:"start"});
+    } else {
+      render();
+    }
+    saveProgress();
+  }
+  function next(){ goTo(current + (readingMode==="continuous"?1:(spread?2:1))); }
+  function prev(){ goTo(current - (readingMode==="continuous"?1:(spread?2:1))); }
+
+  function render(){
+    if(!pages.length) return;
+    stage.innerHTML = "";
+    stage.classList.toggle("continuous", readingMode==="continuous");
+
+    const indices = readingMode==="continuous"
+      ? pages.map((_,i)=>i)
+      : [current].concat(spread && current+1<pages.length ? [current+1] : []);
+
+    indices.forEach(i=>{
+      const img = new Image();
+      img.className = "page";
+      img.src = pages[i].url;
+      img.alt = `Page ${i+1}`;
+      img.dataset.index = i;
+      img.draggable = false;
+      img.onload = applyFit;
+      stage.appendChild(img);
+    });
+
+    updateUi();
+    requestAnimationFrame(()=>{
+      applyFit();
+      if(readingMode==="continuous"){
+        const target=stage.querySelector(`[data-index="${current}"]`);
+        target?.scrollIntoView({block:"start"});
+      } else viewer.scrollTo({top:0,left:0});
+    });
+  }
+
+  function updateUi(){
+    document.querySelectorAll(".thumb").forEach((el,i)=>{
+      el.classList.toggle("active", i===current || (spread && i===current+1));
+    });
+    const active = thumbs.querySelector(".thumb.active");
+    if(active) active.scrollIntoView({block:"nearest"});
+
+    const shownEnd = Math.min(pages.length,current+(spread?2:1));
+    $("#pageCounter").textContent = spread && shownEnd>current+1
+      ? `${current+1}–${shownEnd} / ${pages.length}`
+      : `${current+1} / ${pages.length}`;
+
+    slider.value = current+1;
+    slider.style.setProperty("--progress", pages.length>1 ? `${current/(pages.length-1)*100}%` : "100%");
+    $("#spreadBtn").style.background = spread ? "rgba(139,92,246,.18)" : "";
+  }
+
+  function applyFit(){
+    const imgs = [...stage.querySelectorAll("img")];
+    if(!imgs.length) return;
+
+    // The viewer always fills the entire main area. Controls float above it.
+    const edge = readingMode==="continuous" ? 0 : 56;
+    const availW = Math.max(120, viewer.clientWidth - edge);
+    const availH = Math.max(120, viewer.clientHeight - edge);
+
+    if(readingMode==="continuous"){
+      imgs.forEach(img=>{
+        if(!img.naturalWidth) return;
+        let scale;
+        if(fitMode==="actual") scale=zoom;
+        else if(fitMode==="height") scale=(availH/img.naturalHeight)*zoom;
+        else scale=(availW/img.naturalWidth)*zoom;
+
+        img.style.width=`${Math.max(1,img.naturalWidth*scale)}px`;
+        img.style.height="auto";
+        img.style.maxWidth="none";
+      });
+    } else {
+      const gap = spread ? 14 : 0;
+      const totalW = imgs.reduce((n,img)=>n+(img.naturalWidth||1),0)+gap;
+      const maxH = Math.max(...imgs.map(img=>img.naturalHeight||1));
+      let scale;
+
+      if(fitMode==="actual") scale=zoom;
+      else if(fitMode==="width") scale=(availW/totalW)*zoom;
+      else scale=(availH/maxH)*zoom;
+
+      imgs.forEach(img=>{
+        img.style.width=`${Math.max(1,(img.naturalWidth||1)*scale)}px`;
+        img.style.height="auto";
+        img.style.maxWidth="none";
+      });
+    }
+
+    $("#zoomLabel").textContent =
+      fitMode==="actual" ? `${Math.round(zoom*100)}%`
+      : `${fitMode==="width"?"W":"H"} ${Math.round(zoom*100)}%`;
+  }
+
+  function setFit(mode){
+    fitMode = mode;
+    zoom = 1;
+    applyFit();
+  }
+
+  function changeZoom(delta){
+    zoom = Math.min(4,Math.max(.2,zoom+delta));
+    applyFit();
+  }
+
+  function toggleSidebar(){
+    if(innerWidth<=800) app.classList.toggle("mobile-sidebar");
+    else app.classList.toggle("sidebar-collapsed");
+  }
+
+  function showControls(){
+    clearTimeout(controlsTimer);
+    app.classList.remove("controls-hidden");
+
+    if(pages.length){
+      controlsTimer = setTimeout(hideControls, CONTROL_HIDE_DELAY);
+    }
+  }
+
+  function hideControls(){
+    if(!pages.length) return;
+    app.classList.add("controls-hidden");
+
+  }
+
+  function keepControlsAlive(){
+    if(!pages.length) return;
+    showControls();
+  }
+
+  function closeBook(){
+    clearTimeout(controlsTimer);
+    app.classList.remove("controls-hidden");
+
+    cleanup();
+    bookName = "";
+    slider.disabled = true;
+    slider.value = 1;
+    slider.max = 1;
+    slider.style.setProperty("--progress","0%");
+    $("#title").textContent = "CBZ Reader";
+    $("#subtitle").textContent = "Open a comic archive to start reading";
+    $("#sideTitle").textContent = "No comic";
+    $("#sideCount").textContent = "0 pages";
+    $("#pageCounter").textContent = "0 / 0";
+    empty.style.display = "";
+    app.classList.add("sidebar-collapsed");
+  }
+
+  $("#openBtn").onclick = $("#heroOpenBtn").onclick = ()=>fileInput.click();
+  fileInput.onchange = ()=>{ openFile(fileInput.files[0]); fileInput.value=""; };
+  $("#menuBtn").onclick = toggleSidebar;
+  $("#closeBookBtn").onclick = closeBook;
+  $("#prevZone").onclick = prev;
+  $("#nextZone").onclick = next;
+  $("#fitWidthBtn").onclick = ()=>setFit("width");
+  $("#fitHeightBtn").onclick = ()=>setFit("height");
+  $("#actualBtn").onclick = ()=>setFit("actual");
+  $("#zoomOutBtn").onclick = ()=>changeZoom(-.1);
+  $("#zoomInBtn").onclick = ()=>changeZoom(.1);
+  $("#modeBtn").onclick = ()=>{
+    readingMode = readingMode==="page" ? "continuous" : "page";
+    $("#modeBtn").style.background = readingMode==="continuous" ? "rgba(139,92,246,.18)" : "";
+    $("#modeBtn").title = readingMode==="continuous" ? "Continuous scroll mode" : "Book/page mode";
+    render();
+    toast(readingMode==="continuous" ? "Infinite scroll mode" : "Book reading mode");
+  };
+  $("#spreadBtn").onclick = ()=>{
+    if(readingMode==="continuous"){ toast("Two-page view is for book mode"); return; }
+    spread = !spread;
+    if(spread && current%2===1) current--;
+    render();
+  };
+  $("#fullscreenBtn").onclick = ()=>{
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  };
+
+  slider.addEventListener("input",()=>goTo(Number(slider.value)-1));
+
+  window.addEventListener("resize",applyFit);
+
+  // Mouse wheel is reserved for normal vertical/horizontal scrolling.
+  // Zoom is controlled explicitly with +/- so reading never gets trapped.
+
+
+  document.addEventListener("keydown",e=>{
+    if(e.target.matches("input")) return;
+    if(e.key==="ArrowRight" || e.key==="PageDown" || e.key===" "){ e.preventDefault(); next(); }
+    else if(e.key==="ArrowLeft" || e.key==="PageUp"){ e.preventDefault(); prev(); }
+    else if(e.key.toLowerCase()==="f") $("#fullscreenBtn").click();
+    else if(e.key.toLowerCase()==="t") toggleSidebar();
+    else if(e.key==="Home") goTo(0);
+    else if(e.key==="End") goTo(pages.length-1);
+    else if(e.key==="+" || e.key==="=") changeZoom(.1);
+    else if(e.key==="-") changeZoom(-.1);
+  });
+
+  // Immersive auto-hide controls.
+  // Moving near the top/bottom or hovering a hidden reveal strip restores them.
+  $("#topReveal").addEventListener("mouseenter", showControls);
+  $("#bottomReveal").addEventListener("mouseenter", showControls);
+  $(".toolbar").addEventListener("mouseenter", keepControlsAlive);
+  $(".bottom").addEventListener("mouseenter", keepControlsAlive);
+
+  document.addEventListener("mousemove", e=>{
+    if(!pages.length) return;
+    if(e.clientY <= 48 || e.clientY >= innerHeight-48){
+      showControls();
+    }
+  }, {passive:true});
+
+  // Any deliberate interaction briefly brings controls back, then they retract.
+  document.addEventListener("keydown", ()=>{
+    if(pages.length) showControls();
+  });
+  document.addEventListener("click", e=>{
+    if(!pages.length) return;
+    if(e.clientY <= 70 || e.clientY >= innerHeight-60) showControls();
+  });
+
+  // Drag and drop
+  window.addEventListener("dragenter",e=>{
+    e.preventDefault(); dragDepth++; document.body.classList.add("dragging");
+  });
+  window.addEventListener("dragover",e=>e.preventDefault());
+  window.addEventListener("dragleave",e=>{
+    e.preventDefault(); dragDepth--;
+    if(dragDepth<=0){dragDepth=0;document.body.classList.remove("dragging")}
+  });
+  window.addEventListener("drop",e=>{
+    e.preventDefault();dragDepth=0;document.body.classList.remove("dragging");
+    const f = [...e.dataTransfer.files].find(x=>/\.(cbz|zip)$/i.test(x.name));
+    if(f) openFile(f); else toast("Drop a .cbz file");
+  });
+
+  viewer.addEventListener("scroll",()=>{
+    if(readingMode!=="continuous" || !pages.length) return;
+    const imgs=[...stage.querySelectorAll(".page")];
+    const top=viewer.getBoundingClientRect().top + 20;
+    let best=current, dist=Infinity;
+    imgs.forEach(img=>{
+      const d=Math.abs(img.getBoundingClientRect().top-top);
+      if(d<dist){dist=d;best=Number(img.dataset.index);}
+    });
+    if(best!==current){
+      current=best;
+      updateUi();
+      saveProgress();
+    }
+  },{passive:true});
+
+  // Basic swipe navigation
+  let touchX = null;
+  viewer.addEventListener("touchstart",e=>{ touchX=e.changedTouches[0].clientX; },{passive:true});
+  viewer.addEventListener("touchend",e=>{
+    if(touchX===null) return;
+    const dx=e.changedTouches[0].clientX-touchX;
+    if(Math.abs(dx)>60) dx<0?next():prev();
+    touchX=null;
+  },{passive:true});
+})();
+</script>
+</body>
+</html>
+
